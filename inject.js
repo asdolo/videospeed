@@ -298,7 +298,7 @@ function defineVideoController() {
         <div id="controller" style="top:${top}; left:${left}; opacity:${
       tc.settings.controllerOpacity
     }">
-          <span data-action="drag" class="draggable">${speed}</span>
+          <span data-action="drag" class="draggable">${speed} (${getFormattedRemaining(this.video)})</span>
           <span id="controls">
             <button data-action="rewind" class="rw">«</button>
             <button data-action="slower">&minus;</button>
@@ -343,6 +343,13 @@ function defineVideoController() {
     this.speedIndicator = shadow.querySelector("span");
     var fragment = document.createDocumentFragment();
     fragment.appendChild(wrapper);
+
+	const speedIndicator = this.speedIndicator;
+	
+	this.video.ontimeupdate = function() {
+		var speed = Number(this.playbackRate.toFixed(2));
+		speedIndicator.textContent = `${speed.toFixed(2)} (${getFormattedRemaining(this)})`;
+	}
 
     switch (true) {
       case location.hostname == "www.amazon.com":
@@ -435,7 +442,7 @@ function setupListener() {
     log("Playback rate changed to " + speed, 4);
 
     log("Updating controller with new speed", 5);
-    speedIndicator.textContent = speed.toFixed(2);
+    speedIndicator.textContent = `${speed.toFixed(2)} (${getFormattedRemaining(video)})`;
     tc.settings.speeds[src] = speed;
     log("Storing lastSpeed in settings for the rememberSpeed feature", 5);
     tc.settings.lastSpeed = speed;
@@ -713,7 +720,7 @@ function setSpeed(video, speed) {
     video.playbackRate = Number(speedvalue);
   }
   var speedIndicator = video.vsc.speedIndicator;
-  speedIndicator.textContent = speedvalue;
+  speedIndicator.textContent = `${speedvalue} (${getFormattedRemaining(video)})`;
   tc.settings.lastSpeed = speed;
   refreshCoolDown();
   log("setSpeed finished: " + speed, 5);
@@ -907,4 +914,11 @@ function showController(controller) {
     timer = false;
     log("Hiding controller", 5);
   }, 2000);
+}
+
+function getFormattedRemaining(video) {
+	var remaining = video.duration ? (video.duration - video.currentTime)/video.playbackRate : undefined;
+	return remaining
+	? new Date(remaining * 1000).toISOString().substr(11, 8)
+	: undefined;
 }
