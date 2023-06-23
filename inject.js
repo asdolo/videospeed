@@ -304,7 +304,7 @@ function defineVideoController() {
         <div id="controller" style="top:${top}; left:${left}; opacity:${
       tc.settings.controllerOpacity
     }">
-          <span data-action="drag" class="draggable">${speed} (${getFormattedRemaining(this.video)})</span>
+          <span data-action="drag" class="draggable">x${speed} (${getFormattedRemaining(this.video)}) (-> ${getFormattedEndTimestamp(this.video)})</span>
           <span id="controls">
             <button data-action="rewind" class="rw">«</button>
             <button data-action="slower">&minus;</button>
@@ -354,7 +354,7 @@ function defineVideoController() {
 	
 	this.video.ontimeupdate = function() {
 		var speed = Number(this.playbackRate.toFixed(2));
-		speedIndicator.textContent = `${speed.toFixed(2)} (${getFormattedRemaining(this)})`;
+		speedIndicator.textContent = `x${speed.toFixed(2)} (${getFormattedRemaining(this)}) (-> ${getFormattedEndTimestamp(this)})`;
 	}
 
     switch (true) {
@@ -459,7 +459,7 @@ function setupListener() {
     log("Playback rate changed to " + speed, 4);
 
     log("Updating controller with new speed", 5);
-    speedIndicator.textContent = `${speed.toFixed(2)} (${getFormattedRemaining(video)})`;
+    speedIndicator.textContent = `x${speed.toFixed(2)} (${getFormattedRemaining(video)}) (-> ${getFormattedEndTimestamp(video)})`;
     tc.settings.speeds[src] = speed;
     log("Storing lastSpeed in settings for the rememberSpeed feature", 5);
     tc.settings.lastSpeed = speed;
@@ -742,7 +742,7 @@ function setSpeed(video, speed) {
     video.playbackRate = Number(speedvalue);
   }
   var speedIndicator = video.vsc.speedIndicator;
-  speedIndicator.textContent = `${speedvalue} (${getFormattedRemaining(video)})`;
+  speedIndicator.textContent = `x${speedvalue} (${getFormattedRemaining(video)}) (-> ${getFormattedEndTimestamp(video)})`;
   tc.settings.lastSpeed = speed;
   refreshCoolDown();
   log("setSpeed finished: " + speed, 5);
@@ -943,4 +943,11 @@ function getFormattedRemaining(video) {
 	return remaining
 	? new Date(remaining * 1000).toISOString().substr(11, 8)
 	: undefined;
+}
+
+function getFormattedEndTimestamp(video) {
+  var remaining = video.duration ? (video.duration - video.currentTime)/video.playbackRate : undefined;
+  const endDate = remaining ? new Date(new Date().getTime() + remaining*1000) : undefined
+
+  return endDate ? `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}hs` : undefined;
 }
