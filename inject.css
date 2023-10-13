@@ -9,6 +9,13 @@
   opacity: 1 !important;
 }
 
+.vsc-controller {
+  /* In case of pages using `white-space: pre-line` (eg Discord), don't render vsc's whitespace */
+  white-space: normal;
+  /* Disables text selection when the user is dragging the controller around */
+  user-select: none;
+}
+
 /* Origin specific overrides */
 /* YouTube player */
 .ytp-hide-info-bar .vsc-controller {

@@ -1,4 +1,5 @@
 var regStrip = /^[\r\t\f\v ]+|[\r\t\f\v ]+$/gm;
+var regEndsWithFlags = /\/(?!.*(.).*\1)[gimsuy]*$/;
 
 var tc = {
   settings: {
@@ -271,10 +272,15 @@ function defineVideoController() {
 
   tc.videoController.prototype.initializeControls = function () {
     log("initializeControls Begin", 5);
-    var document = this.video.ownerDocument;
-    var speed = this.video.playbackRate.toFixed(2),
-      top = Math.max(this.video.offsetTop, 0) + "px",
-      left = Math.max(this.video.offsetLeft, 0) + "px";
+    const document = this.video.ownerDocument;
+    const speed = this.video.playbackRate.toFixed(2);
+    const rect = this.video.getBoundingClientRect();
+    // getBoundingClientRect is relative to the viewport; style coordinates
+    // are relative to offsetParent, so we adjust for that here. offsetParent
+    // can be null if the video has `display: none` or is not yet in the DOM.
+    const offsetRect = this.video.offsetParent?.getBoundingClientRect();
+    const top = Math.max(rect.top - (offsetRect?.top || 0), 0) + "px";
+    const left = Math.max(rect.left - (offsetRect?.left || 0), 0) + "px";
 
     log("Speed variable set to: " + speed, 5);
 
@@ -367,8 +373,9 @@ function defineVideoController() {
         p.insertBefore(fragment, p.firstChild);
         break;
       case location.hostname == "tv.apple.com":
-        // insert after parent for correct stacking context
-        this.parent.getRootNode().querySelector(".scrim").prepend(fragment);
+        // insert before parent to bypass overlay
+        this.parent.parentNode.insertBefore(fragment, this.parent.parentNode.firstChild);
+        break;
       default:
         // Note: when triggered via a MutationRecord, it's possible that the
         // target is not the immediate parent. This appends the controller as
@@ -394,7 +401,17 @@ function isBlacklisted() {
 
     if (match.startsWith("/")) {
       try {
-        var regexp = new RegExp(match);
+        var parts = match.split("/");
+
+        if (regEndsWithFlags.test(match)) {
+          var flags = parts.pop();
+          var regex = parts.slice(1).join("/");
+        } else {
+          var flags = "";
+          var regex = match;
+        }
+
+        var regexp = new RegExp(regex, flags);
       } catch (err) {
         return;
       }
@@ -474,6 +491,7 @@ function setupListener() {
         } else {
           video.playbackRate = tc.settings.lastSpeed;
         }
+        event.stopImmediatePropagation();
       } else {
         updateSpeedFromEvent(video);
       }
@@ -611,7 +629,7 @@ function initializeNow(document) {
 
   function checkForVideo(node, parent, added) {
     // Only proceed with supposed removal if node is missing from DOM
-    if (!added && document.body.contains(node)) {
+    if (!added && document.body?.contains(node)) {
       return;
     }
     if (
@@ -642,6 +660,13 @@ function initializeNow(document) {
             case "childList":
               mutation.addedNodes.forEach(function (node) {
                 if (typeof node === "function") return;
+                if (node === document.documentElement) {
+                  // This happens on sites that use document.write, e.g. watch.sling.com
+                  // When the document gets replaced, we lose all event handlers, so we need to reinitialize
+                  log("Document was replaced, reinitializing", 5);
+                  initializeWhenReady(document);
+                  return;
+                }
                 checkForVideo(node, node.parentNode || mutation.target, true);
               });
               mutation.removedNodes.forEach(function (node) {
@@ -651,23 +676,20 @@ function initializeNow(document) {
               break;
             case "attributes":
               if (
-                mutation.target.attributes["aria-hidden"] &&
-                mutation.target.attributes["aria-hidden"].value == "false"
+                (mutation.target.attributes["aria-hidden"] &&
+                mutation.target.attributes["aria-hidden"].value == "false")
+                || mutation.target.nodeName === 'APPLE-TV-PLUS-PLAYER'
               ) {
                 var flattenedNodes = getShadow(document.body);
-                var node = flattenedNodes.filter(
+                var nodes = flattenedNodes.filter(
                   (x) => x.tagName == "VIDEO"
-                )[0];
-                if (node) {
-                  var oldController = flattenedNodes.filter((x) =>
-                    x.classList.contains("vsc-controller")
-                  )[0];
-                  if (oldController) {
-                    oldController.remove();
-                    if (node.vsc) {
-                      delete node.vsc;
-                    }
-                  }
+                );
+                for (let node of nodes) {
+                  // only add vsc the first time for the apple-tv case (the attribute change is triggered every time you click the vsc)
+                  if (node.vsc && mutation.target.nodeName === 'APPLE-TV-PLUS-PLAYER')
+                    continue;
+                  if (node.vsc)
+                    node.vsc.remove();
                   checkForVideo(node, node.parentNode || mutation.target, true);
                 }
               }
@@ -679,7 +701,7 @@ function initializeNow(document) {
     );
   });
   observer.observe(document, {
-    attributeFilter: ["aria-hidden"],
+    attributeFilter: ["aria-hidden", "data-focus-method"],
     childList: true,
     subtree: true
   });
@@ -756,7 +778,7 @@ function runAction(action, value, e) {
       } else if (action === "faster") {
         log("Increase speed", 5);
         // Maximum playback speed in Chrome is set to 16:
-        // https://cs.chromium.org/chromium/src/third_party/blink/renderer/core/html/media/html_media_element.cc?gsn=kMinRate&l=166
+        // https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/media/html_media_element.h;l=117;drc=70155ab40e50115ac8cff6e8f4b7703a7784d854
         var s = Math.min(
           (v.playbackRate < 0.1 ? 0.0 : v.playbackRate) + value,
           16
@@ -765,7 +787,7 @@ function runAction(action, value, e) {
       } else if (action === "slower") {
         log("Decrease speed", 5);
         // Video min rate is 0.0625:
-        // https://cs.chromium.org/chromium/src/third_party/blink/renderer/core/html/media/html_media_element.cc?gsn=kMinRate&l=165
+        // https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/media/html_media_element.h;l=116;drc=70155ab40e50115ac8cff6e8f4b7703a7784d854
         var s = Math.max(v.playbackRate - value, 0.07);
         setSpeed(v, s);
       } else if (action === "reset") {
