@@ -246,9 +246,9 @@ function defineVideoController() {
           log("mutation of A/V element", 5);
           var controller = this.div;
           if (!mutation.target.src && !mutation.target.currentSrc) {
-            controller.classList.add("vsc-nosource");
+            // controller.classList.add("vsc-nosource");
           } else {
-            controller.classList.remove("vsc-nosource");
+            // controller.classList.remove("vsc-nosource");
           }
         }
       });
@@ -282,7 +282,7 @@ function defineVideoController() {
     wrapper.classList.add("vsc-controller");
 
     if (!this.video.src && !this.video.currentSrc) {
-      wrapper.classList.add("vsc-nosource");
+      // wrapper.classList.add("vsc-nosource");
     }
 
     if (tc.settings.startHidden) {
